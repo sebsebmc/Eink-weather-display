@@ -818,20 +818,25 @@ parameter:
 info:
     Use this function to paste image data into a buffer
 ******************************************************************************/
-void Paint_DrawBitMap_Paste(const unsigned char* image_buffer, UWORD xStart, UWORD yStart, UWORD imageWidth, UWORD imageHeight, UBYTE flipColor)
+void Paint_DrawBitMap_Paste(const unsigned char* image_buffer, UWORD xStart, UWORD yStart, UWORD imageWidth, UWORD imageHeight, UBYTE flipColor, UWORD scale)
 {
     UBYTE color, srcImage;
     UWORD x, y;
     UWORD width = (imageWidth%8==0 ? imageWidth/8 : imageWidth/8+1);
     
+    UWORD i, j;
     for (y = 0; y < imageHeight; y++) {
         for (x = 0; x < imageWidth; x++) {
-            srcImage = image_buffer[y*width + x/8];
-            if(flipColor)
-                color = (((srcImage<<(x%8) & 0x80) == 0) ? 1 : 0);
-            else
-                color = (((srcImage<<(x%8) & 0x80) == 0) ? 0 : 1);
-            Paint_SetPixel(x+xStart, y+yStart, color);
+            for(i = 0; i < scale; i++) {
+                for(j = 0; j < scale; j++) {
+                    srcImage = image_buffer[y*width + x/8];
+                    if(flipColor)
+                        color = (((srcImage<<(x%8) & 0x80) == 0) ? 1 : 0);
+                    else
+                        color = (((srcImage<<(x%8) & 0x80) == 0) ? 0 : 1);
+                    Paint_SetPixel((x*scale)+i+xStart, (y*scale)+j+yStart, color);
+                }
+            }
         }
     }
 }

@@ -12,6 +12,7 @@
 #include <math.h>
 
 #include "secrets.h"
+#include "icons.h"
 
 // from https://github.com/esp8266/Arduino/blob/master/cores/esp8266/TZ.h
 #define TZ_America_Chicago PSTR("CST6CDT,M3.2.0,M11.1.0")
@@ -27,13 +28,15 @@ enum class ICON {
   ClearDay, ClearNight, Thunderstorm, Rain, Snow, Sleet, Wind, Fog, Cloudy, PartlyCloudyDay, PartlyCloudyNight
 };
 
+const unsigned char *iconData[11] = {clearDay, clearNight, thunderstorm, rain, snow, sleet, wind, fog, cloudy, partlyCloudyDay, partlyCloudyNight};
+
 enum class PRECIP {
   Rain, Snow, Sleet, Ice, Mixed, None
 };
 
 struct Daily {
   ICON icon;
-  PRECIP precipType;
+  PRECIP precipType;  
   int tempHigh;
   int tempLow;
   int precipProb;
@@ -48,10 +51,39 @@ struct Hourly {
   int precipProb;
 };
 
-Hourly hourlyInfo[12];
+const int HOURS = 12;
+Hourly hourlyInfo[HOURS];
 
 timeval* timeAcquired = 0;
 struct tm timeinfo;
+
+const char *cacert = "-----BEGIN CERTIFICATE-----\n" \
+"MIIEkjCCA3qgAwIBAgITBn+USionzfP6wq4rAfkI7rnExjANBgkqhkiG9w0BAQsF\n" \
+"ADCBmDELMAkGA1UEBhMCVVMxEDAOBgNVBAgTB0FyaXpvbmExEzARBgNVBAcTClNj\n" \
+"b3R0c2RhbGUxJTAjBgNVBAoTHFN0YXJmaWVsZCBUZWNobm9sb2dpZXMsIEluYy4x\n" \
+"OzA5BgNVBAMTMlN0YXJmaWVsZCBTZXJ2aWNlcyBSb290IENlcnRpZmljYXRlIEF1\n" \
+"dGhvcml0eSAtIEcyMB4XDTE1MDUyNTEyMDAwMFoXDTM3MTIzMTAxMDAwMFowOTEL\n" \
+"MAkGA1UEBhMCVVMxDzANBgNVBAoTBkFtYXpvbjEZMBcGA1UEAxMQQW1hem9uIFJv\n" \
+"b3QgQ0EgMTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALJ4gHHKeNXj\n" \
+"ca9HgFB0fW7Y14h29Jlo91ghYPl0hAEvrAIthtOgQ3pOsqTQNroBvo3bSMgHFzZM\n" \
+"9O6II8c+6zf1tRn4SWiw3te5djgdYZ6k/oI2peVKVuRF4fn9tBb6dNqcmzU5L/qw\n" \
+"IFAGbHrQgLKm+a/sRxmPUDgH3KKHOVj4utWp+UhnMJbulHheb4mjUcAwhmahRWa6\n" \
+"VOujw5H5SNz/0egwLX0tdHA114gk957EWW67c4cX8jJGKLhD+rcdqsq08p8kDi1L\n" \
+"93FcXmn/6pUCyziKrlA4b9v7LWIbxcceVOF34GfID5yHI9Y/QCB/IIDEgEw+OyQm\n" \
+"jgSubJrIqg0CAwEAAaOCATEwggEtMA8GA1UdEwEB/wQFMAMBAf8wDgYDVR0PAQH/\n" \
+"BAQDAgGGMB0GA1UdDgQWBBSEGMyFNOy8DJSULghZnMeyEE4KCDAfBgNVHSMEGDAW\n" \
+"gBScXwDfqgHXMCs4iKK4bUqc8hGRgzB4BggrBgEFBQcBAQRsMGowLgYIKwYBBQUH\n" \
+"MAGGImh0dHA6Ly9vY3NwLnJvb3RnMi5hbWF6b250cnVzdC5jb20wOAYIKwYBBQUH\n" \
+"MAKGLGh0dHA6Ly9jcnQucm9vdGcyLmFtYXpvbnRydXN0LmNvbS9yb290ZzIuY2Vy\n" \
+"MD0GA1UdHwQ2MDQwMqAwoC6GLGh0dHA6Ly9jcmwucm9vdGcyLmFtYXpvbnRydXN0\n" \
+"LmNvbS9yb290ZzIuY3JsMBEGA1UdIAQKMAgwBgYEVR0gADANBgkqhkiG9w0BAQsF\n" \
+"AAOCAQEAYjdCXLwQtT6LLOkMm2xF4gcAevnFWAu5CIw+7bMlPLVvUOTNNWqnkzSW\n" \
+"MiGpSESrnO09tKpzbeR/FoCJbM8oAxiDR3mjEH4wW6w7sGDgd9QIpuEdfF7Au/ma\n" \
+"eyKdpwAJfqxGF4PcnCZXmTA5YpaP7dreqsXMGz7KQ2hsVxa81Q4gLv7/wmpdLqBK\n" \
+"bRRYh5TmOTFffHPLkIhqhBGWJ6bt2YFGpn6jcgAKUj6DiAdjd4lpFw85hdKrCEVN\n" \
+"0FE6/V1dN2RMfjCyVSRCnTawXZwXgWHxyvkQAiSr6w10kY17RSlQOYiypok1JR4U\n" \
+"akcjMS9cmvqtmg5iUaQqqcT5NJ0hGA==\n" \
+"-----END CERTIFICATE-----\n";
 
 #define uS_TO_S_FACTOR 1000000ULL  // Conversion factor for micro seconds to seconds
 
@@ -63,6 +95,20 @@ void timeavailable(struct timeval *t) {
     Serial.println("Failed to get local time");
   }
 }
+
+struct SpiRamAllocator : ArduinoJson::Allocator {
+  void* allocate(size_t size) override {
+    return heap_caps_malloc(size, MALLOC_CAP_8BIT);
+  }
+
+  void deallocate(void* pointer) override {
+    heap_caps_free(pointer);
+  }
+
+  void* reallocate(void* ptr, size_t new_size) override {
+    return heap_caps_realloc(ptr, new_size, MALLOC_CAP_8BIT);
+  }
+};
 
 void setup() {
   unsigned long start = millis();
@@ -116,13 +162,16 @@ void setup() {
   esp_deep_sleep_start();
 }
 
+ICON curIcon;
+int cTemp;
+
 void getWeather() {
   WiFiClientSecure cs;
   cs.setInsecure();
   // set timeout to 10 seconds
   cs.setTimeout(10000);
   HTTPClient http;
-  http.useHTTP10(true);
+  // http.useHTTP10(true);
   // Ask HTTPClient to collect the Transfer-Encoding header
   // (by default, it discards all headers)
   const char* keys[] = {"Transfer-Encoding", "Content-Length"};
@@ -150,9 +199,9 @@ void getWeather() {
   JsonDocument doc;
 
   int code;
-  char** url;
-  asprintf(url, "https://api.pirateweather.net/forecast/%s/42.1057,-88.0585?exclude=minutely,hourly,alerts", api_key);
-  if(http.begin(cs, *url)){
+  char* url;
+  asprintf(&url, "https://api.pirateweather.net/forecast/%s/42.1057,-88.0585?exclude=minutely,hourly,alerts", api_key);
+  if(http.begin(cs, url)){
     code = http.GET();
     Serial.printf("HTTP Response code %d \n", code);
   }else{
@@ -163,8 +212,8 @@ void getWeather() {
   ReadLoggingStream loggingStream(http.getStream(), Serial);  
 
   // Choose the right stream depending on the Transfer-Encoding header
-  Serial.println(http.header("Transfer-Encoding"));
-  Serial.println(http.header("Content-Length"));
+  Serial.printf("Transfer-Encoding: %s\n",http.header("Transfer-Encoding"));
+  Serial.printf("Content-Length: %s\n", http.header("Content-Length"));
   // Stream& response =
   //     http.header("Transfer-Encoding") == "chunked" ? decodedStream : wifiClientWithLog;
   DeserializationError error = deserializeJson(doc, loggingStream, DeserializationOption::Filter(filter));
@@ -178,7 +227,7 @@ void getWeather() {
 
   const char* currently_icon = doc["currently"]["icon"]; // "partly-cloudy-night"
   float currently_temperature = doc["currently"]["temperature"]; // 29.86
-  int cTemp = (int)(round(currently_temperature));
+  cTemp = (int)(round(currently_temperature));
 
   int day = 0;
   for (JsonObject daily_data_item : doc["daily"]["data"].as<JsonArray>()) {
@@ -198,15 +247,17 @@ void getWeather() {
     day++;
   }
   http.end();
+  free(url);
 }
 
 void getHourly(){
-  WiFiClientSecure cs;
-  cs.setInsecure();
+  WiFiClient cs;
+  // cs.setInsecure();
   // set timeout to 10 seconds
+  // cs.setCACert(cacert);
   cs.setTimeout(10000);
   HTTPClient http;
-  http.useHTTP10(true);
+  // http.useHTTP10(true);
   // Ask HTTPClient to collect the Transfer-Encoding header
   // (by default, it discards all headers)
   const char* keys[] = {"Transfer-Encoding", "Content-Length"};
@@ -231,9 +282,17 @@ void getHourly(){
   filter_daily_data_0["temperatureHigh"] = true;
   filter_daily_data_0["temperatureLow"] = true;
 
-  JsonDocument doc;
+  Serial.printf("Largest free block: %d \n", heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+  Serial.printf("Free heap size: %d \n", esp_get_free_heap_size());
+  Serial.printf("Lowest available: %d \n",  esp_get_minimum_free_heap_size());
+  heap_caps_print_heap_info(MALLOC_CAP_8BIT);
+  SpiRamAllocator allocator;
+  JsonDocument doc(&allocator);
+  // JsonDocument doc;
   int code;
-  if(http.begin(cs, "https://api.pirateweather.net/forecast/0jVBJfDQ9DYALRas4pc47nK5euzioIoh/42.1057,-88.0585?exclude=minutely,currently,daily,alerts")){
+  char* url;
+  asprintf(&url, "http://api.pirateweather.net/forecast/%s/42.1057,-88.0585?exclude=minutely,currently,daily,alerts", api_key);
+  if(http.begin(cs, url)){
     code = http.GET();
     Serial.printf("HTTP Response code %d \n", code);
   }else{
@@ -241,25 +300,32 @@ void getHourly(){
   }
 
   // decorate the WifiClient so it logs its content to Serial
-  ReadLoggingStream loggingStream(http.getStream(), Serial);  
+  ReadLoggingStream loggingStream(http.getStream(), Serial);
 
   // Choose the right stream depending on the Transfer-Encoding header
-  Serial.println(http.header("Transfer-Encoding"));
-  Serial.println(http.header("Content-Length"));
+  Serial.printf("Transfer-Encoding: %s\n",http.header("Transfer-Encoding"));
+  Serial.printf("Content-Length: %s\n", http.header("Content-Length"));
   // Stream& response =
   //     http.header("Transfer-Encoding") == "chunked" ? decodedStream : wifiClientWithLog;
+  heap_caps_print_heap_info(MALLOC_CAP_8BIT);
+  // String body = http.getString();
+  heap_caps_print_heap_info(MALLOC_CAP_8BIT);
   DeserializationError error = deserializeJson(doc, loggingStream, DeserializationOption::Filter(filter));
 
   if (error) {
     Serial.println();
     Serial.print("deserializeJson() failed: ");
     Serial.println(error.c_str());
+    Serial.printf("Largest free block: %d \n", heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    Serial.printf("Free heap size: %d \n", esp_get_free_heap_size());
+    Serial.printf("Lowest available: %d \n",  esp_get_minimum_free_heap_size());
+    heap_caps_print_heap_info(MALLOC_CAP_8BIT);
     return;
   }
 
   int hour = 0;
   for (JsonObject hourly_data_item : doc["hourly"]["data"].as<JsonArray>()) {
-    if(hour == 12) {
+    if(hour == HOURS) {
       break;
     }
     // const char* hourly_data_item_icon = hourly_data_item["icon"]; // "partly-cloudy-night", "wind", ...
@@ -269,6 +335,7 @@ void getHourly(){
     hour++;
   }
   http.end();
+  free(url);
 }
 
 PRECIP parsePercip(const char* precipStr) {
@@ -343,20 +410,32 @@ void drawWeather(){
 }
 
 void drawCurrent(){
-
+  char temp[3];
+  sprintf(temp, "%2d", cTemp);
+  Paint_DrawBitMap_Paste(iconData[(int)curIcon], 10, 160, 48, 48, 1, 3);
+  Paint_DrawString_EN(40, 320, temp, &Font24, EPD_4IN0E_WHITE, EPD_4IN0E_GREEN, 3);
 }
 
 void drawHourly(){
-
+  const int xStart = 250;
+  Paint_DrawLine(xStart, 50, xStart, 155, EPD_4IN0E_BLACK, DOT_PIXEL_3X3, LINE_STYLE_SOLID);
+  Paint_DrawLine(xStart, 155, 460, 155, EPD_4IN0E_BLACK, DOT_PIXEL_3X3, LINE_STYLE_SOLID);
+  for(int i = 0; i < HOURS; i++) {
+    Paint_DrawRectangle(xStart + 5 + (i * 20), 150, xStart + 15 + (i*20), 150 - hourlyInfo[i].precipProb, EPD_4IN0E_BLUE, DOT_PIXEL_1X1, DRAW_FILL_FULL);
+  }
 }
 
 void drawDaily(){
+  const int xStart = 220;
+  const int width = 130;
   char temp[3];
   for(int i = 0; i < DAYS; i++) {
+    Paint_DrawString_EN(xStart+(i*width), 175, weekday[(timeinfo.tm_wday + i) % 7], &Font16, EPD_4IN0E_WHITE, EPD_4IN0E_BLACK, 2);
     sprintf(temp, "%2d", dayInfo[i].tempHigh);
-    Paint_DrawString_EN(200 + (i * 100), 200, temp, &Font24, EPD_4IN0E_WHITE, EPD_4IN0E_RED, 2);
+    Paint_DrawBitMap_Paste(iconData[(int)dayInfo[i].icon], xStart + (i * width) - 10, 240, 48, 48, 1, 2);
+    Paint_DrawString_EN(xStart + (i * width), 200, temp, &Font24, EPD_4IN0E_WHITE, EPD_4IN0E_RED, 2);
     sprintf(temp, "%2d", dayInfo[i].tempLow);
-    Paint_DrawString_EN(200 + (i * 100), 350, temp, &Font24, EPD_4IN0E_WHITE, EPD_4IN0E_BLUE, 2);
+    Paint_DrawString_EN(xStart + (i * width), 350, temp, &Font24, EPD_4IN0E_WHITE, EPD_4IN0E_BLUE, 2);
   }
 }
 

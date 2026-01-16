@@ -51,7 +51,7 @@ struct Hourly {
   int precipProb;
 };
 
-const int HOURS = 12;
+const int HOURS = 24;
 Hourly hourlyInfo[HOURS];
 
 timeval* timeAcquired = 0;
@@ -226,6 +226,7 @@ void getWeather() {
   }
 
   const char* currently_icon = doc["currently"]["icon"]; // "partly-cloudy-night"
+  curIcon = parseIcon(currently_icon);
   float currently_temperature = doc["currently"]["temperature"]; // 29.86
   cTemp = (int)(round(currently_temperature));
 
@@ -239,7 +240,7 @@ void getWeather() {
     float daily_data_item_precipProbability = daily_data_item["precipProbability"]; // 0.08, 0, 0, 0.21, ...
     dayInfo[day].precipProb = (int)(round(100.0*daily_data_item_precipProbability));
     const char* daily_data_item_precipType = daily_data_item["precipType"]; // "snow", "snow", "rain", ...
-    dayInfo[day].precipType = parsePercip(daily_data_item_precipType);
+    dayInfo[day].precipType = parsePrecip(daily_data_item_precipType);
     float daily_data_item_temperatureHigh = daily_data_item["temperatureHigh"]; // 36.91, 33.24, 41.41, ...
     dayInfo[day].tempHigh = (int)(round(daily_data_item_temperatureHigh));
     float daily_data_item_temperatureLow = daily_data_item["temperatureLow"]; // 23.11, 28.63, 33.46, 33.85, ...
@@ -332,13 +333,15 @@ void getHourly(){
     float hourly_data_item_precipProbability = hourly_data_item["precipProbability"]; // 0.08, 0.06, 0, 0, ...
     int prob = (int)(round(100.0* hourly_data_item_precipProbability));
     const char* hourly_data_item_precipType = hourly_data_item["precipType"]; // "snow", "snow", "snow", ...
+    hourlyInfo[hour].precipProb = prob;
+    hourlyInfo[hour].precipType = parsePrecip(hourly_data_item_precipType);
     hour++;
   }
   http.end();
   free(url);
 }
 
-PRECIP parsePercip(const char* precipStr) {
+PRECIP parsePrecip(const char* precipStr) {
   switch(precipStr[0]){
       case 'r': //rain
       return PRECIP::Rain;
@@ -410,25 +413,29 @@ void drawWeather(){
 }
 
 void drawCurrent(){
-  char temp[3];
+  char temp[4];
   sprintf(temp, "%2d", cTemp);
   Paint_DrawBitMap_Paste(iconData[(int)curIcon], 10, 160, 48, 48, 1, 3);
   Paint_DrawString_EN(40, 320, temp, &Font24, EPD_4IN0E_WHITE, EPD_4IN0E_GREEN, 3);
 }
 
 void drawHourly(){
+  const int yStart = 20;
+  const int height = 120;
   const int xStart = 250;
-  Paint_DrawLine(xStart, 50, xStart, 155, EPD_4IN0E_BLACK, DOT_PIXEL_3X3, LINE_STYLE_SOLID);
-  Paint_DrawLine(xStart, 155, 460, 155, EPD_4IN0E_BLACK, DOT_PIXEL_3X3, LINE_STYLE_SOLID);
+  const int barWidth = 10;
+  Paint_DrawLine(xStart, yStart, xStart, yStart+height, EPD_4IN0E_BLACK, DOT_PIXEL_3X3, LINE_STYLE_SOLID);
+  Paint_DrawLine(xStart, yStart+height, xStart+(barWidth*HOURS)+10, yStart+height, EPD_4IN0E_BLACK, DOT_PIXEL_3X3, LINE_STYLE_SOLID);
   for(int i = 0; i < HOURS; i++) {
-    Paint_DrawRectangle(xStart + 5 + (i * 20), 150, xStart + 15 + (i*20), 150 - hourlyInfo[i].precipProb, EPD_4IN0E_BLUE, DOT_PIXEL_1X1, DRAW_FILL_FULL);
+    Paint_DrawRectangle(xStart + 5 + (i * barWidth), yStart+height - hourlyInfo[i].precipProb , xStart + 15 + (i*barWidth), yStart+height, EPD_4IN0E_BLUE, DOT_PIXEL_1X1, DRAW_FILL_FULL);
   }
 }
 
 void drawDaily(){
   const int xStart = 220;
   const int width = 130;
-  char temp[3];
+  char temp[4];
+  char prob[5];
   for(int i = 0; i < DAYS; i++) {
     Paint_DrawString_EN(xStart+(i*width), 175, weekday[(timeinfo.tm_wday + i) % 7], &Font16, EPD_4IN0E_WHITE, EPD_4IN0E_BLACK, 2);
     sprintf(temp, "%2d", dayInfo[i].tempHigh);
@@ -436,6 +443,10 @@ void drawDaily(){
     Paint_DrawString_EN(xStart + (i * width), 200, temp, &Font24, EPD_4IN0E_WHITE, EPD_4IN0E_RED, 2);
     sprintf(temp, "%2d", dayInfo[i].tempLow);
     Paint_DrawString_EN(xStart + (i * width), 350, temp, &Font24, EPD_4IN0E_WHITE, EPD_4IN0E_BLUE, 2);
+    if(dayInfo[i].precipProb >= 25) {
+      sprintf(prob, "%2d%%", dayInfo[i].precipProb);
+      Paint_DrawString_EN(xStart + (i * width)+65, 325, prob, &Font24, EPD_4IN0E_WHITE, EPD_4IN0E_BLUE, 1);
+    }
   }
 }
 

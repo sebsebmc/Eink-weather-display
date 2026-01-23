@@ -11,6 +11,14 @@
 #include <ArduinoJson.h>
 #include <math.h>
 
+#include <Wire.h>
+#include "Adafruit_MAX1704X.h"
+
+Adafruit_MAX17048 maxlipo;
+
+// MAX17048 i2c address
+bool addr0x36 = true;
+
 #include "secrets.h"
 #include "icons.h"
 
@@ -88,6 +96,7 @@ const char *cacert = "-----BEGIN CERTIFICATE-----\n" \
 #define uS_TO_S_FACTOR 1000000ULL  // Conversion factor for micro seconds to seconds
 
 RTC_DATA_ATTR int bootCount = 0;
+int battPercent;
 
 void timeavailable(struct timeval *t) {
   timeAcquired = t;
@@ -113,6 +122,11 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 void setup() {
   unsigned long start = millis();
   bootCount++;
+  if (!maxlipo.begin()) {
+    Serial.println(F("Couldnt find Adafruit MAX17048"));
+  }else {
+    addr0x36 = true;
+  }
   // put your setup code here, to run once:
   WiFi.begin(ssid, password);
   DEV_Module_Init();
@@ -131,6 +145,12 @@ void setup() {
   }
   Serial.println(" TIME SYNCED");
   esp_sntp_stop();
+
+  if(addr0x36){
+    Serial.print(F("Batt Voltage: ")); Serial.print(maxlipo.cellVoltage(), 3); Serial.println(" V");
+    Serial.print(F("Batt Percent: ")); Serial.print(maxlipo.cellPercent(), 1); Serial.println(" %");
+    battPercent = (int)maxlipo.cellPercent();
+  }
 
   getWeather();
   getHourly();
@@ -404,6 +424,11 @@ void drawDate(){
   Paint_DrawString_EN(10, 10, weekday[timeinfo.tm_wday], &Font16, EPD_4IN0E_WHITE, EPD_4IN0E_BLACK, 3);
   Paint_DrawString_EN(115, 10, months[timeinfo.tm_mon], &Font16,  EPD_4IN0E_WHITE, EPD_4IN0E_BLACK, 3);
   Paint_DrawString_EN(10, 62, dayOfMonth, &Font24, EPD_4IN0E_WHITE, EPD_4IN0E_BLACK,  5);
+  if(battPercent < 50) {
+    char battStr[3];
+    sprintf(battStr, "%2d", battPercent);
+    Paint_DrawString_EN(550, 10, battStr, &Font24, EPD_4IN0E_WHITE, EPD_4IN0E_BLACK);
+  }
 }
 
 void drawWeather(){
@@ -429,6 +454,9 @@ void drawHourly(){
   for(int i = 0; i < HOURS; i++) {
     Paint_DrawRectangle(xStart + 5 + (i * barWidth), yStart+height - hourlyInfo[i].precipProb , xStart + 15 + (i*barWidth), yStart+height, EPD_4IN0E_BLUE, DOT_PIXEL_1X1, DRAW_FILL_FULL);
   }
+  char hour[3];
+  sprintf(hour, "%2d", (timeinfo.tm_hour + (HOURS / 2)) % 12);
+  Paint_DrawString_EN(xStart + (barWidth * HOURS/2), yStart+height+5, hour, &Font24, EPD_4IN0E_WHITE, EPD_4IN0E_BLACK);
 }
 
 void drawDaily(){
